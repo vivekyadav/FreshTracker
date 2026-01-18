@@ -10,6 +10,7 @@ type Item = {
     category: string | null;
     expiryDate: Date | string | null; // serialized date from server
     status: string;
+    imageUrl: string | null;
 };
 
 export function InventoryList({ items }: { items: Item[] }) {
@@ -129,8 +130,21 @@ export function InventoryList({ items }: { items: Item[] }) {
                         return (
                             <div key={item.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-full ${colorClass}`}>
-                                        {getStatusIcon(days)}
+                                    <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden ${item.imageUrl ? 'bg-gray-50' : colorClass}`}>
+                                        {item.imageUrl ? (
+                                            <img
+                                                src={item.imageUrl}
+                                                alt={item.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    // Fallback if image fails to load
+                                                    (e.target as HTMLImageElement).src = '';
+                                                    (e.target as HTMLImageElement).parentElement!.classList.add(colorClass);
+                                                }}
+                                            />
+                                        ) : (
+                                            getStatusIcon(days)
+                                        )}
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">

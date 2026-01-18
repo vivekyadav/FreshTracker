@@ -22,7 +22,7 @@ export async function GET() {
 
         return NextResponse.json({
             count: expiringItems.length,
-            items: expiringItems.map((i) => ({
+            items: expiringItems.map((i: { name: string; expiryDate: Date | null }) => ({
                 name: i.name,
                 days: Math.ceil((new Date(i.expiryDate!).getTime() - Date.now()) / (1000 * 3600 * 24))
             }))

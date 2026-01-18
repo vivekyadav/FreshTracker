@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import sharp from 'sharp';
+import { v2 as cloudinary } from 'cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
@@ -18,8 +27,39 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Google AI API Key not configured' }, { status: 500 });
         }
 
-        // Convert image to base64 for Gemini
-        const buffer = Buffer.from(await image.arrayBuffer());
+        // Convert image to buffer 
+        const buffer = Buffer.from(await image.arrayBuffer() as ArrayBuffer);
+
+        // Resize image with Sharp before uploading
+        let processBuffer = buffer;
+        try {
+            processBuffer = await sharp(buffer)
+                .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+                .webp({ quality: 80 })
+                .toBuffer();
+        } catch (sharpError) {
+            console.error('Sharp Processing Error:', sharpError);
+        }
+
+        // Upload to Cloudinary (Production Storage)
+        let publicUrl = 'https://placehold.co/400';
+        if (process.env.CLOUDINARY_CLOUD_NAME) {
+            try {
+                const uploadResult = await new Promise((resolve, reject) => {
+                    cloudinary.uploader.upload_stream({
+                        folder: 'freshtracker',
+                        resource_type: 'image'
+                    }, (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }).end(processBuffer);
+                }) as any;
+                publicUrl = uploadResult.secure_url;
+            } catch (cloudError) {
+                console.error('Cloudinary Upload Error:', cloudError);
+            }
+        }
+
         const base64Image = buffer.toString('base64');
 
         // Prepare the prompt and image parts for Gemini
@@ -71,7 +111,7 @@ Return ONLY a JSON object with this structure:
                 quantity: 1,
                 expiryDate,
                 status: 'available',
-                imageUrl: 'https://placehold.co/400', // Mock URL for now
+                imageUrl: publicUrl,
             },
         });
 
