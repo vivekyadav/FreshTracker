@@ -28,10 +28,11 @@ export async function POST(request: Request) {
         }
 
         // Convert image to buffer 
-        const buffer = Buffer.from(await image.arrayBuffer() as ArrayBuffer);
+        const arrayBuffer = await image.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
 
         // Resize image with Sharp before uploading
-        let processBuffer = buffer;
+        let processBuffer: Buffer = buffer;
         try {
             processBuffer = await sharp(buffer)
                 .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
