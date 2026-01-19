@@ -4,12 +4,16 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 
-// Configure Cloudinary
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Configure Cloudinary - supporting both individual keys and the combined URL
+if (process.env.CLOUDINARY_URL) {
+    cloudinary.config(true); // Automatically uses CLOUDINARY_URL from env
+} else {
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+}
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
@@ -43,8 +47,11 @@ export async function POST(request: Request) {
         }
 
         // Upload to Cloudinary (Production Storage)
-        let publicUrl = 'https://placehold.co/400';
-        if (process.env.CLOUDINARY_CLOUD_NAME) {
+        let publicUrl = null; // Use null so the UI can fallback to icons
+
+        const isCloudinaryConfigured = process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME;
+
+        if (isCloudinaryConfigured) {
             try {
                 const uploadResult = await new Promise((resolve, reject) => {
                     cloudinary.uploader.upload_stream({

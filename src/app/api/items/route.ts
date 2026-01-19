@@ -17,7 +17,7 @@ export async function POST(request: Request) {
                 quantity: quantity || 1,
                 expiryDate: expiryDate ? new Date(expiryDate) : null,
                 status: 'available',
-                imageUrl: 'https://placehold.co/400', // Default placeholder
+                imageUrl: null, // Allow UI to fallback to category icons
             },
         });
 
