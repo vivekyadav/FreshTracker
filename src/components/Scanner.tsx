@@ -10,7 +10,7 @@ export function Scanner() {
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<{ name: string; expiryDate: string } | null>(null);
+    const [result, setResult] = useState<{ name: string; expiryDate: string; isGuest?: boolean } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,12 +42,11 @@ export function Scanner() {
             setFile(null);
             setPreview(null);
             // Wait a bit to show success then clear
-            setTimeout(() => setResult(null), 3000); // 3s success toast
+            setTimeout(() => setResult(null), 5000); // 5s success toast
 
-            router.refresh(); // Update the server component list
-
-            // In a real app, we would trigger a refresh of the inventory list here
-            // For now we just show a success message
+            if (!data.isGuest) {
+                router.refresh(); // Update the server component list only if saved
+            }
 
         } catch (err) {
             console.error(err);
@@ -74,13 +73,17 @@ export function Scanner() {
                 </div>
 
                 {result ? (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
-                        <div className="bg-green-100 p-2 rounded-full text-green-600">
-                            <Plus size={20} />
+                    <div className={`border rounded-lg p-4 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 ${result.isGuest ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                        <div className={`p-2 rounded-full ${result.isGuest ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                            {result.isGuest ? <Loader2 size={20} /> : <Plus size={20} />}
                         </div>
                         <div>
-                            <p className="font-medium text-green-900">Added {result.name}!</p>
-                            <p className="text-xs text-green-700">Expiry: {new Date(result.expiryDate).toLocaleDateString()}</p>
+                            <p className={`font-medium ${result.isGuest ? 'text-blue-900' : 'text-green-900'}`}>
+                                {result.isGuest ? `Analyzed: ${result.name}` : `Added ${result.name}!`}
+                            </p>
+                            <p className={`text-xs ${result.isGuest ? 'text-blue-700' : 'text-green-700'}`}>
+                                {result.isGuest ? 'Sign up to save this item.' : `Expiry: ${new Date(result.expiryDate).toLocaleDateString()}`}
+                            </p>
                         </div>
                     </div>
                 ) : !preview ? (

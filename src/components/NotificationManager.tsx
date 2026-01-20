@@ -2,11 +2,14 @@
 
 import { useEffect } from 'react';
 
-export function NotificationManager() {
+export function NotificationManager({ items }: { items: any[] }) {
     useEffect(() => {
         const checkNotifications = async () => {
             // Check permission
             if (!('Notification' in window)) return;
+
+            // Only check if we have items
+            if (!items || items.length === 0) return;
 
             let permission = Notification.permission;
             if (permission === 'default') {
@@ -15,38 +18,36 @@ export function NotificationManager() {
 
             if (permission !== 'granted') return;
 
-            // Check server
-            try {
-                const res = await fetch('/api/notifications/check');
-                const data = await res.json();
+            // Check items specifically
+            const now = new Date();
+            const expiringCount = items.filter(item => {
+                if (!item.expiryDate) return false;
+                const expiry = new Date(item.expiryDate);
+                const diffTime = expiry.getTime() - now.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays <= 3 && diffDays >= 0;
+            }).length;
 
-                if (data.count > 0) {
-                    // Basic throttling: Don't spam on reload.
-                    // In real app, store "lastNotified" timestamp.
-                    const lastNotified = localStorage.getItem('lastNotified');
-                    const now = Date.now();
-                    if (lastNotified && now - parseInt(lastNotified) < 1000 * 60 * 60 * 24) {
-                        // Already notified in last 24h
-                        return;
-                    }
+            if (expiringCount > 0) {
+                // Basic throttling: Don't spam on reload.
+                const lastNotified = localStorage.getItem('lastNotified');
+                const lastNotifiedTime = lastNotified ? parseInt(lastNotified) : 0;
 
-                    new Notification('FreshKeeper Alert', {
-                        body: `You have ${data.count} items expiring soon!`,
-                        icon: '/icon.png' // we don't have icon yet, but valid prop
-                    });
-
-                    localStorage.setItem('lastNotified', now.toString());
+                if (Date.now() - lastNotifiedTime < 1000 * 60 * 60 * 12) { // 12h throttle
+                    return;
                 }
-            } catch (e) {
-                console.error('Notification check failed', e);
+
+                new Notification('FreshKeeper Alert', {
+                    body: `You have ${expiringCount} items expiring soon!`,
+                    icon: '/icon.png'
+                });
+
+                localStorage.setItem('lastNotified', Date.now().toString());
             }
         };
 
         checkNotifications();
-
-        // Maybe interval check?
-        // setInterval(checkNotifications, 1000 * 60 * 60); 
-    }, []);
+    }, [items]);
 
     return null; // Renderless component
 }

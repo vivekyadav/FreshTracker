@@ -3,6 +3,7 @@
 import { Trash2, AlertTriangle, CheckCircle, Clock, Loader2, Search, Filter } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ItemDetailModal } from './ItemDetailModal';
 
 type Item = {
     id: number;
@@ -16,6 +17,7 @@ type Item = {
 export function InventoryList({ items }: { items: Item[] }) {
     const router = useRouter();
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [selectedItem, setSelectedItem] = useState<Item | null>(null);
     const [mounted, setMounted] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
@@ -40,9 +42,7 @@ export function InventoryList({ items }: { items: Item[] }) {
         );
     }
 
-    const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this item?')) return;
-
+    const deleteItem = async (id: number) => {
         try {
             setDeletingId(id);
             const res = await fetch(`/api/items/${id}`, {
@@ -61,6 +61,12 @@ export function InventoryList({ items }: { items: Item[] }) {
         } finally {
             setDeletingId(null);
         }
+    };
+
+    const handleDelete = async (id: number) => {
+        // Prevent bubbling to item click
+        if (!confirm('Are you sure you want to delete this item?')) return;
+        await deleteItem(id);
     };
 
     const getDaysDiff = (dateStr: Date | string | null) => {
@@ -116,7 +122,7 @@ export function InventoryList({ items }: { items: Item[] }) {
                 </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
                 {filteredItems.length === 0 ? (
                     <div className="text-center py-10 text-gray-400">
                         <p>No items matching your search.</p>
@@ -128,9 +134,13 @@ export function InventoryList({ items }: { items: Item[] }) {
                         const isDeleting = deletingId === item.id;
 
                         return (
-                            <div key={item.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden ${item.imageUrl ? 'bg-gray-50' : colorClass}`}>
+                            <div
+                                key={item.id}
+                                onClick={() => setSelectedItem(item)}
+                                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all cursor-pointer"
+                            >
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                    <div className={`w-16 h-16 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden transition-all ${item.imageUrl ? 'bg-gray-50' : colorClass}`}>
                                         {item.imageUrl ? (
                                             <img
                                                 src={item.imageUrl}
@@ -146,41 +156,57 @@ export function InventoryList({ items }: { items: Item[] }) {
                                             getStatusIcon(days)
                                         )}
                                     </div>
-                                    <div>
+                                    <div className="flex-1 min-w-0 space-y-1">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="font-medium text-gray-800">{item.name}</h3>
-                                            <span className="text-[10px] uppercase tracking-wider bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                                            <h3 className="font-semibold text-gray-800 text-lg leading-tight truncate">{item.name}</h3>
+                                            <span className="hidden sm:inline-block text-[10px] uppercase tracking-wider bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full whitespace-nowrap">
                                                 {item.category || 'General'}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-gray-500">
-                                            {!mounted ? 'Checking expiry...' : (
-                                                days !== null ? (
-                                                    days < 0 ? `Expired ${Math.abs(days)} days ago` :
-                                                        days === 0 ? 'Expires today' :
-                                                            `Expires in ${days} days`
-                                                ) : 'No expiry date'
-                                            )}
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <p className={`text-sm font-medium ${days !== null && days <= 3 ? 'text-orange-600' : days !== null && days < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                                {!mounted ? 'Checking...' : (
+                                                    days !== null ? (
+                                                        days < 0 ? `Expired ${Math.abs(days)}d ago` :
+                                                            days === 0 ? 'Expires today' :
+                                                                `${days} days left`
+                                                    ) : 'No expiry date'
+                                                )}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <button
-                                    className={`p-2 rounded-lg transition-colors ${isDeleting
-                                        ? 'text-gray-300'
-                                        : 'text-gray-400 hover:text-red-500 hover:bg-red-50 md:opacity-0 group-hover:opacity-100 focus:opacity-100'
-                                        }`}
-                                    aria-label="Delete"
-                                    onClick={() => handleDelete(item.id)}
-                                    disabled={isDeleting}
-                                >
-                                    {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                                </button>
+                                <div className="pl-4">
+                                    <button
+                                        className={`p-3 rounded-lg transition-all ${isDeleting
+                                            ? 'text-gray-300'
+                                            : 'text-gray-300 hover:text-red-500 hover:bg-red-50'
+                                            }`}
+                                        aria-label="Delete"
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // stop click from opening modal
+                                            handleDelete(item.id);
+                                        }}
+                                        disabled={isDeleting}
+                                    >
+                                        {isDeleting ? <Loader2 size={20} className="animate-spin" /> : <Trash2 size={20} />}
+                                    </button>
+                                </div>
                             </div>
                         );
                     })
                 )}
             </div>
+
+            {selectedItem && (
+                <ItemDetailModal
+                    item={selectedItem}
+                    isOpen={!!selectedItem}
+                    onClose={() => setSelectedItem(null)}
+                    onDelete={deleteItem}
+                />
+            )}
         </div>
     );
 }

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
+import { auth } from '@/auth';
 
 // Configure Cloudinary - supporting both individual keys and the combined URL
 if (process.env.CLOUDINARY_URL) {
@@ -111,17 +112,36 @@ Return ONLY a JSON object with this structure:
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + (daysToExpire || 7));
 
-        // Add to database
-        const newItem = await prisma.item.create({
-            data: {
+        const session = await auth();
+
+        let newItem;
+        // User Mode: Save to Database
+        if (session?.user?.id) {
+            newItem = await prisma.item.create({
+                data: {
+                    name,
+                    category: category || 'General',
+                    quantity: 1,
+                    expiryDate,
+                    status: 'available',
+                    imageUrl: publicUrl,
+                    userId: session.user.id
+                },
+            });
+        }
+        // Guest Mode: Return Analysis Only (Ephemeral)
+        else {
+            newItem = {
+                id: -1, // Temporary ID
                 name,
                 category: category || 'General',
                 quantity: 1,
                 expiryDate,
                 status: 'available',
                 imageUrl: publicUrl,
-            },
-        });
+                isGuest: true
+            };
+        }
 
         return NextResponse.json(newItem);
     } catch (error) {
