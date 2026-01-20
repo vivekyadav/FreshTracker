@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import {
+    generateVerificationToken,
+    getVerificationTokenExpiry,
+    sendVerificationEmail,
+} from '@/lib/email';
 
 const signupSchema = z.object({
     email: z.string().email(),
@@ -34,18 +39,33 @@ export async function POST(request: Request) {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const verificationToken = generateVerificationToken();
+        const verificationTokenExpiry = getVerificationTokenExpiry();
 
         const user = await prisma.user.create({
             data: {
                 email,
                 password: hashedPassword,
+                verificationToken,
+                verificationTokenExpiry,
             },
         });
 
-        // Remove password from response
-        const { password: _, ...userWithoutPassword } = user;
+        // Send verification email
+        const emailResult = await sendVerificationEmail(email, verificationToken);
 
-        return NextResponse.json(userWithoutPassword);
+        if (!emailResult.success) {
+            console.error('Failed to send verification email:', emailResult.error);
+            // Don't fail registration if email fails, user can resend
+        }
+
+        // Remove sensitive data from response
+        const { password: _, verificationToken: __, ...userWithoutPassword } = user;
+
+        return NextResponse.json({
+            ...userWithoutPassword,
+            message: 'Account created! Please check your email to verify your account.',
+        });
     } catch (error) {
         console.error('Registration error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

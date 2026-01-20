@@ -24,24 +24,14 @@ export default function SignupForm() {
                 body: JSON.stringify({ email, password }),
             });
 
+            const data = await res.json();
+
             if (!res.ok) {
-                const data = await res.json();
                 throw new Error(data.error || 'Registration failed');
             }
 
-            // Auto-login after registration
-            const result = await signIn('credentials', {
-                email,
-                password,
-                redirect: false,
-            });
-
-            if (result?.error) {
-                setError('Registration successful but login failed. Please log in manually.');
-            } else {
-                router.refresh();
-                router.push('/');
-            }
+            // Redirect to verification pending page
+            router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         } finally {

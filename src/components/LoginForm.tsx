@@ -25,7 +25,15 @@ export default function LoginForm() {
             });
 
             if (result?.error) {
-                setError('Invalid email or password');
+                if (result.error.includes('EMAIL_NOT_VERIFIED')) {
+                    setError('Please verify your email before logging in.');
+                    // Redirect to resend verification page
+                    setTimeout(() => {
+                        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+                    }, 2000);
+                } else {
+                    setError('Invalid email or password');
+                }
             } else {
                 router.refresh();
                 router.push('/');
