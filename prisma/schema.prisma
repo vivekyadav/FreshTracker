@@ -15,6 +15,7 @@ model User {
   emailVerified           Boolean   @default(false)
   verificationToken       String?   @unique
   verificationTokenExpiry DateTime?
+  preferences             Json      @default("{\"showExpiryAsDays\": true}")
   createdAt               DateTime  @default(now())
   items                   Item[]
 }

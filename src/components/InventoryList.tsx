@@ -63,6 +63,30 @@ export function InventoryList({ items }: { items: Item[] }) {
         }
     };
 
+    const updateItem = async (id: number, data: Partial<Item>) => {
+        try {
+            const res = await fetch(`/api/items/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Update failed');
+            }
+
+            const updatedItem = await res.json();
+            // Update selected item with new data
+            setSelectedItem(prev => prev ? { ...prev, ...updatedItem } : null);
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            alert(error instanceof Error ? error.message : 'Failed to update item');
+            throw error;
+        }
+    };
+
     const handleDelete = async (id: number) => {
         // Prevent bubbling to item click
         if (!confirm('Are you sure you want to delete this item?')) return;
@@ -205,6 +229,7 @@ export function InventoryList({ items }: { items: Item[] }) {
                     isOpen={!!selectedItem}
                     onClose={() => setSelectedItem(null)}
                     onDelete={deleteItem}
+                    onUpdate={updateItem}
                 />
             )}
         </div>

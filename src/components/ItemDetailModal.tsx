@@ -1,4 +1,4 @@
-import { X, Calendar, Tag, Trash2, Loader2, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { X, Calendar, Tag, Trash2, Loader2, AlertTriangle, CheckCircle, Clock, Pencil, Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 type Item = {
@@ -15,15 +15,26 @@ type ItemDetailModalProps = {
     isOpen: boolean;
     onClose: () => void;
     onDelete: (id: number) => Promise<void>;
+    onUpdate?: (id: number, data: Partial<Item>) => Promise<void>;
 };
 
-export function ItemDetailModal({ item, isOpen, onClose, onDelete }: ItemDetailModalProps) {
+export function ItemDetailModal({ item, isOpen, onClose, onDelete, onUpdate }: ItemDetailModalProps) {
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isEditingExpiry, setIsEditingExpiry] = useState(false);
+    const [editedExpiry, setEditedExpiry] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (item.expiryDate) {
+            const date = new Date(item.expiryDate);
+            setEditedExpiry(date.toISOString().split('T')[0]);
+        }
+    }, [item.expiryDate]);
 
     if (!isOpen) return null;
 
@@ -33,6 +44,19 @@ export function ItemDetailModal({ item, isOpen, onClose, onDelete }: ItemDetailM
         await onDelete(item.id);
         setIsDeleting(false);
         onClose();
+    };
+
+    const handleSaveExpiry = async () => {
+        if (!onUpdate || !editedExpiry) return;
+        setIsSaving(true);
+        try {
+            await onUpdate(item.id, { expiryDate: new Date(editedExpiry) });
+            setIsEditingExpiry(false);
+        } catch (error) {
+            console.error('Failed to update expiry:', error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const getDaysDiff = (dateStr: Date | string | null) => {
@@ -104,17 +128,52 @@ export function ItemDetailModal({ item, isOpen, onClose, onDelete }: ItemDetailM
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 bg-gray-50 rounded-xl space-y-1">
-                            <div className="flex items-center gap-2 text-gray-500 mb-1">
-                                <Calendar size={16} />
-                                <span className="text-xs font-semibold uppercase tracking-wider">Expiry Date</span>
+                            <div className="flex items-center justify-between text-gray-500 mb-1">
+                                <div className="flex items-center gap-2">
+                                    <Calendar size={16} />
+                                    <span className="text-xs font-semibold uppercase tracking-wider">Expiry Date</span>
+                                </div>
+                                {onUpdate && !isEditingExpiry && (
+                                    <button
+                                        onClick={() => setIsEditingExpiry(true)}
+                                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                        title="Edit expiry date"
+                                    >
+                                        <Pencil size={14} />
+                                    </button>
+                                )}
                             </div>
-                            <p className="font-medium text-gray-900">
-                                {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(undefined, {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                }) : 'N/A'}
-                            </p>
+                            {isEditingExpiry ? (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={editedExpiry}
+                                        onChange={(e) => setEditedExpiry(e.target.value)}
+                                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                                    />
+                                    <button
+                                        onClick={handleSaveExpiry}
+                                        disabled={isSaving}
+                                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                                    >
+                                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                    </button>
+                                    <button
+                                        onClick={() => setIsEditingExpiry(false)}
+                                        className="p-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="font-medium text-gray-900">
+                                    {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(undefined, {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                    }) : 'N/A'}
+                                </p>
+                            )}
                         </div>
                         <div className="p-4 bg-gray-50 rounded-xl space-y-1">
                             <div className="flex items-center gap-2 text-gray-500 mb-1">

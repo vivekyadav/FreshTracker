@@ -3,6 +3,7 @@ import { Scanner } from '@/components/Scanner';
 import { InventoryList } from '@/components/InventoryList';
 import { ManualEntry } from '@/components/ManualEntry';
 import { NotificationManager } from '@/components/NotificationManager';
+import { PreferencesToggle } from '@/components/PreferencesToggle';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { ChefHat, LogIn, LogOut, User as UserIcon } from 'lucide-react';
@@ -43,6 +44,7 @@ export default async function Home() {
                   <span className="text-sm font-semibold">{session.user?.email?.split('@')[0]}</span>
                   <span className="text-xs text-green-100">Pro Member</span>
                 </div>
+                <PreferencesToggle />
                 <form action={async () => {
                   'use server';
                   await signOut({ redirectTo: '/' });
