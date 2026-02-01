@@ -4,27 +4,27 @@ import crypto from 'crypto';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export function generateVerificationToken(): string {
-    return crypto.randomBytes(32).toString('hex');
+  return crypto.randomBytes(32).toString('hex');
 }
 
 export function getVerificationTokenExpiry(): Date {
-    const expiry = new Date();
-    expiry.setHours(expiry.getHours() + 24); // 24 hour expiry
-    return expiry;
+  const expiry = new Date();
+  expiry.setHours(expiry.getHours() + 24); // 24 hour expiry
+  return expiry;
 }
 
 export async function sendVerificationEmail(
-    email: string,
-    token: string
+  email: string,
+  token: string
 ): Promise<{ success: boolean; error?: string }> {
-    try {
-        const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/verify?token=${token}`;
+  try {
+    const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/verify?token=${token}`;
 
-        await resend.emails.send({
-            from: 'FreshTracker <noreply@freshtracker.app>',
-            to: email,
-            subject: 'Verify your email address',
-            html: `
+    await resend.emails.send({
+      from: 'FreshTracker <noreply@freshtracker.doppa.in>',
+      to: email,
+      subject: 'Verify your email address',
+      html: `
         <!DOCTYPE html>
         <html>
           <head>
@@ -66,14 +66,14 @@ export async function sendVerificationEmail(
           </body>
         </html>
       `,
-        });
+    });
 
-        return { success: true };
-    } catch (error) {
-        console.error('Failed to send verification email:', error);
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to send email',
-        };
-    }
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send verification email:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send email',
+    };
+  }
 }
