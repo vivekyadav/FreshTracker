@@ -19,79 +19,100 @@ if (process.env.CLOUDINARY_URL) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
+async function processImage(file: File): Promise<{ buffer: Buffer; processedBuffer: Buffer; mimeType: string }> {
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    let processedBuffer: Buffer = buffer;
+    try {
+        processedBuffer = await sharp(buffer)
+            .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
+    } catch (sharpError) {
+        console.error('Sharp Processing Error:', sharpError);
+    }
+
+    return { buffer, processedBuffer, mimeType: file.type };
+}
+
+async function uploadToCloudinary(buffer: Buffer): Promise<string | null> {
+    const isCloudinaryConfigured = process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME;
+
+    if (!isCloudinaryConfigured) return null;
+
+    try {
+        const uploadResult = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream({
+                folder: 'freshtracker',
+                resource_type: 'image'
+            }, (error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+            }).end(buffer);
+        }) as any;
+        return uploadResult.secure_url;
+    } catch (cloudError) {
+        console.error('Cloudinary Upload Error:', cloudError);
+        return null;
+    }
+}
+
 export async function POST(request: Request) {
     try {
         const formData = await request.formData();
-        const image = formData.get('image') as File;
 
-        if (!image) {
-            return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+        // Support both 'images' (multiple) and 'image' (single, backwards compatible)
+        let imageFiles: File[] = formData.getAll('images') as File[];
+        if (imageFiles.length === 0) {
+            const singleImage = formData.get('image') as File;
+            if (singleImage) {
+                imageFiles = [singleImage];
+            }
+        }
+
+        if (imageFiles.length === 0) {
+            return NextResponse.json({ error: 'No images provided' }, { status: 400 });
         }
 
         if (!process.env.GOOGLE_AI_API_KEY) {
             return NextResponse.json({ error: 'Google AI API Key not configured' }, { status: 500 });
         }
 
-        // Convert image to buffer 
-        const arrayBuffer = await image.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        // Process all images in parallel
+        const processedImages = await Promise.all(imageFiles.map(processImage));
 
-        // Resize image with Sharp before uploading
-        let processBuffer: Buffer = buffer;
-        try {
-            processBuffer = await sharp(buffer)
-                .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-                .webp({ quality: 80 })
-                .toBuffer();
-        } catch (sharpError) {
-            console.error('Sharp Processing Error:', sharpError);
-        }
+        // Upload first image to Cloudinary (for storage)
+        const publicUrl = await uploadToCloudinary(processedImages[0].processedBuffer);
 
-        // Upload to Cloudinary (Production Storage)
-        let publicUrl = null; // Use null so the UI can fallback to icons
+        // Prepare image parts for Gemini (all images)
+        const imageParts = processedImages.map(({ buffer, mimeType }) => ({
+            inlineData: {
+                data: buffer.toString('base64'),
+                mimeType,
+            },
+        }));
 
-        const isCloudinaryConfigured = process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME;
+        // Updated prompt for multi-image analysis
+        const prompt = `I'm sending you ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} of the same grocery or household item${imageFiles.length > 1 ? ' from different angles' : ''}.
 
-        if (isCloudinaryConfigured) {
-            try {
-                const uploadResult = await new Promise((resolve, reject) => {
-                    cloudinary.uploader.upload_stream({
-                        folder: 'freshtracker',
-                        resource_type: 'image'
-                    }, (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
-                    }).end(processBuffer);
-                }) as any;
-                publicUrl = uploadResult.secure_url;
-            } catch (cloudError) {
-                console.error('Cloudinary Upload Error:', cloudError);
-            }
-        }
+Please analyze ALL images together to identify the item. Look for:
+- Product name (check labels, packaging text)
+- Category (Fruit, Vegetable, Dairy, Meat, Bakery, Pantry, Snacks, Medicine, Beverages, Personal Care, Household)
+- Expiry date (look for "Best By", "Use By", "Exp", "BB", dates on packaging)
 
-        const base64Image = buffer.toString('base64');
-
-        // Prepare the prompt and image parts for Gemini
-        const prompt = `Identify the grocery or household item in this image. 
-Be specific about its category.
-Possible categories include: Fruit, Vegetable, Dairy, Meat, Bakery, Pantry, Snacks, Medicine, Beverages, Personal Care, Household.
+IMPORTANT: Combine information from ALL images to get the most complete picture.
+If you find an expiry date in any image, calculate how many days from today (${new Date().toISOString().split('T')[0]}) until that date.
 
 Return ONLY a JSON object with this structure:
 {
-  "name": "Item Name",
-  "category": "Item Category (use the list above)",
-  "daysToExpire": number (an estimate of how many days until this item expires if bought fresh today, or 0 if it has no clear expiry)
+  "name": "Product Name",
+  "category": "Category from list above",
+  "daysToExpire": number (days until expiry, or estimate if no date visible),
+  "expiryDateFound": true/false (whether you found an actual expiry date)
 }`;
 
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    data: base64Image,
-                    mimeType: image.type,
-                },
-            },
-        ]);
+        const result = await model.generateContent([prompt, ...imageParts]);
 
         const response = await result.response;
         const text = response.text();
@@ -145,7 +166,7 @@ Return ONLY a JSON object with this structure:
 
         return NextResponse.json(newItem);
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to process image';
+        const errorMessage = error instanceof Error ? error.message : 'Failed to process images';
         console.error('Vision API Error:', error);
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
