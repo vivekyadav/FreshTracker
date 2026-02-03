@@ -33,7 +33,7 @@ export default async function Home() {
                 <ChefHat size={32} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">FreshKeeper</h1>
+                <h1 className="text-2xl font-bold tracking-tight">FreshTracker</h1>
                 <p className="text-green-100 text-sm font-medium">Smart Pantry Tracker</p>
               </div>
             </div>
